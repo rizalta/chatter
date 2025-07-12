@@ -1,5 +1,7 @@
 package chat
 
+import "log"
+
 type hub struct {
 	clients    map[*client]struct{}
 	register   chan *client
@@ -20,6 +22,7 @@ func (h *hub) Run() {
 	for {
 		select {
 		case client := <-h.register:
+			log.Printf("Client registered: %s", client.id)
 			h.clients[client] = struct{}{}
 
 		case client := <-h.unregister:

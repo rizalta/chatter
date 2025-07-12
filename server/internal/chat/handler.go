@@ -12,6 +12,7 @@ import (
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
+	CheckOrigin:     func(r *http.Request) bool { return true },
 }
 
 func HandleWS(hub *hub, w http.ResponseWriter, r *http.Request) {
@@ -25,6 +26,7 @@ func HandleWS(hub *hub, w http.ResponseWriter, r *http.Request) {
 		id:   uuid.New(),
 		hub:  hub,
 		conn: conn,
+		send: make(chan []byte),
 	}
 
 	client.hub.register <- client

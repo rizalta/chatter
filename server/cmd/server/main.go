@@ -22,6 +22,7 @@ func main() {
 	})
 
 	hub := chat.NewHub()
+	go hub.Run()
 
 	r.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
 		chat.HandleWS(hub, w, r)

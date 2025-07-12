@@ -17,7 +17,7 @@ const (
 )
 
 var (
-	newLine = []byte{'n'}
+	newLine = []byte{'\n'}
 	space   = []byte{' '}
 )
 
