@@ -23,10 +23,10 @@ func HandleWS(hub *hub, w http.ResponseWriter, r *http.Request) {
 	}
 
 	client := &client{
-		id:   uuid.New(),
+		id:   uuid.New().String(),
 		hub:  hub,
 		conn: conn,
-		send: make(chan []byte),
+		send: make(chan *Message),
 	}
 
 	client.hub.register <- client

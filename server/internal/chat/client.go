@@ -1,11 +1,11 @@
 package chat
 
 import (
-	"bytes"
+	"encoding/json"
 	"log"
+	"strings"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 )
 
@@ -17,15 +17,15 @@ const (
 )
 
 var (
-	newLine = []byte{'\n'}
-	space   = []byte{' '}
+	space   = " "
+	newLine = "\n"
 )
 
 type client struct {
-	id   uuid.UUID
+	id   string
 	conn *websocket.Conn
 	hub  *hub
-	send chan []byte
+	send chan *Message
 }
 
 func (c *client) readPump() {
@@ -38,7 +38,7 @@ func (c *client) readPump() {
 	c.conn.SetReadDeadline(time.Now().Add(pongWait))
 	c.conn.SetPongHandler(func(appData string) error { c.conn.SetReadDeadline(time.Now().Add(pongWait)); return nil })
 	for {
-		_, message, err := c.conn.ReadMessage()
+		_, data, err := c.conn.ReadMessage()
 		if err != nil {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
 				log.Printf("readPump error: %v", err)
@@ -46,7 +46,19 @@ func (c *client) readPump() {
 			break
 		}
 
-		message = bytes.TrimSpace(bytes.ReplaceAll(message, newLine, space))
+		var incoming IncomingMessage
+		if err := json.Unmarshal(data, &incoming); err != nil {
+			log.Printf("readPump unmarshall err: %v", err)
+			continue
+		}
+
+		message := &Message{
+			Content:   strings.TrimSpace(strings.ReplaceAll(incoming.Content, newLine, space)),
+			To:        "chatroom",
+			From:      c.id,
+			Timestamp: time.Now().Unix(),
+		}
+
 		c.hub.broadcast <- message
 	}
 }
@@ -71,12 +83,26 @@ func (c *client) writePump() {
 			if err != nil {
 				return
 			}
-			w.Write(message)
+
+			data, err := json.Marshal(message)
+			if err != nil {
+				log.Printf("writePump marshall error: %v", err)
+				continue
+			}
+
+			w.Write(data)
 			n := len(c.send)
 			for range n {
-				w.Write(newLine)
-				w.Write(<-c.send)
+				m := <-c.send
+				w.Write([]byte(newLine))
+				data, err := json.Marshal(m)
+				if err != nil {
+					log.Printf("writePump marshall error: %v", err)
+					continue
+				}
+				w.Write(data)
 			}
+
 			if err := w.Close(); err != nil {
 				return
 			}
