@@ -28,7 +28,7 @@ func main() {
 		chat.HandleWS(hub, w, r)
 	})
 
-	log.Printf("Running server on port: %s", config.Port)
+	log.Printf("Running server on port: %s", config.ServerPort)
 
-	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%s", config.Port), r))
+	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%s", config.ServerPort), r))
 }

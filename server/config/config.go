@@ -1,22 +1,28 @@
 // Package config is for config
 package config
 
-import "os"
+import (
+	"log"
+
+	"github.com/caarlos0/env/v6"
+	"github.com/joho/godotenv"
+)
 
 type Config struct {
-	Port string
+	ServerPort string `env:"SERVER_PORT" envDefault:"8080"`
+	RedisAddr  string `env:"REDIS_ADDR,required"`
 }
 
-func Load() *Config {
-	return &Config{
-		Port: getEnv("PORT", "8080"),
+func Load() (*Config, error) {
+	if err := godotenv.Load(); err != nil {
+		log.Printf("No .env file found. Loading from the environment")
 	}
-}
 
-func getEnv(key, fallback string) string {
-	if val, ok := os.LookupEnv(key); ok {
-		return val
-	} else {
-		return fallback
+	cfg := &Config{}
+
+	if err := env.Parse(cfg); err != nil {
+		return nil, err
 	}
+
+	return cfg, nil
 }
