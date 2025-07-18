@@ -15,7 +15,10 @@ func main() {
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
 
-	config := config.Load()
+	config, err := config.Load()
+	if err != nil {
+		log.Fatalf("Error loading config, %v", err)
+	}
 
 	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("Hello"))
