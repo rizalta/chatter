@@ -1,8 +1,15 @@
 package user
 
 import (
+	"crypto/ed25519"
+	"fmt"
+	"time"
+
+	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
 )
+
+const jwtExpirationTime = 24 * time.Hour
 
 type Repository interface {
 	CreateUser(username, password string) (*User, error)
@@ -10,11 +17,15 @@ type Repository interface {
 }
 
 type Service struct {
-	repo Repository
+	repo       Repository
+	privateKey ed25519.PrivateKey
 }
 
-func NewService(repo Repository) *Service {
-	return &Service{repo}
+func NewService(repo Repository, privateKey ed25519.PrivateKey) *Service {
+	return &Service{
+		repo:       repo,
+		privateKey: privateKey,
+	}
 }
 
 func (s *Service) Register(username, password string) (*User, error) {
@@ -36,6 +47,21 @@ func (s *Service) Login(username, password string) (string, error) {
 		return "", err
 	}
 
-	// TODO genrate jwt
-	return "jwt", nil
+	jwtToken, err := s.generateToken(u.ID)
+	if err != nil {
+		return "", fmt.Errorf("user: error genrating jwt token: %v", err)
+	}
+
+	return jwtToken, nil
+}
+
+func (s *Service) generateToken(userID string) (string, error) {
+	claims := jwt.MapClaims{
+		"sub": userID,
+		"exp": time.Now().Add(24 * time.Hour).Unix(),
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodEdDSA, claims)
+
+	return token.SignedString(s.privateKey)
 }
