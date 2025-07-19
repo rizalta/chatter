@@ -2,6 +2,7 @@ package user
 
 import (
 	"crypto/ed25519"
+	"errors"
 	"fmt"
 	"time"
 
@@ -10,6 +11,8 @@ import (
 )
 
 const jwtExpirationTime = 24 * time.Hour
+
+var ErrUserAlreadyExists = errors.New("user already exists")
 
 type Repository interface {
 	CreateUser(username, password string) (*User, error)
@@ -29,6 +32,11 @@ func NewService(repo Repository, privateKey ed25519.PrivateKey) *Service {
 }
 
 func (s *Service) Register(username, password string) (*User, error) {
+	_, err := s.repo.GetUserByUsername(username)
+	if err == nil {
+		return nil, ErrUserAlreadyExists
+	}
+
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
 		return nil, err

@@ -3,6 +3,8 @@ package main
 import (
 	"chatter/server/config"
 	"chatter/server/internal/chat"
+	"chatter/server/internal/database"
+	"chatter/server/internal/user"
 	"fmt"
 	"log"
 	"net/http"
@@ -20,9 +22,16 @@ func main() {
 		log.Fatalf("Error loading config, %v", err)
 	}
 
-	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("Hello"))
-	})
+	db, err := database.NewClient(config.RedisAddr)
+	if err != nil {
+		log.Fatalf("Error connecting to db, %v", err)
+	}
+
+	userRepo := database.NewUserRepo(db)
+	userService := user.NewService(userRepo, config.JWTPrivateKey)
+	userHandler := user.NewHandler(userService)
+
+	r.Handle("/user", userHandler.Routes())
 
 	hub := chat.NewHub()
 	go hub.Run()
