@@ -12,10 +12,14 @@ import (
 
 const jwtExpirationTime = 24 * time.Hour
 
-var ErrUserAlreadyExists = errors.New("user already exists")
+var (
+	ErrUserAlreadyExists  = errors.New("user already exists")
+	ErrUserNotFound       = errors.New("user not found")
+	ErrInvalidCredentials = errors.New("invalid credentials")
+)
 
 type Repository interface {
-	CreateUser(username, password string) (*User, error)
+	CreateUser(u *User) error
 	GetUserByUsername(username string) (*User, error)
 }
 
@@ -39,20 +43,32 @@ func (s *Service) Register(username, password string) (*User, error) {
 
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("user: failed to hash password, %v", err)
 	}
 
-	return s.repo.CreateUser(username, string(hashedPassword))
+	u := User{
+		Username: username,
+		Password: string(hashedPassword),
+	}
+
+	if err := s.repo.CreateUser(&u); err != nil {
+		return nil, fmt.Errorf("user: failed to create user, %v", err)
+	}
+
+	return &u, err
 }
 
 func (s *Service) Login(username, password string) (string, error) {
 	u, err := s.repo.GetUserByUsername(username)
 	if err != nil {
-		return "", err
+		return "", ErrUserNotFound
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(u.Password), []byte(password)); err != nil {
-		return "", err
+		if errors.Is(err, bcrypt.ErrMismatchedHashAndPassword) {
+			return "", ErrInvalidCredentials
+		}
+		return "", fmt.Errorf("user: failed to check password, %v", err)
 	}
 
 	jwtToken, err := s.generateToken(u.ID)
