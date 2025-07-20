@@ -4,18 +4,19 @@ import (
 	"chatter/server/config"
 	"chatter/server/internal/chat"
 	"chatter/server/internal/database"
+	"chatter/server/internal/middleware"
 	"chatter/server/internal/user"
 	"fmt"
 	"log"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
+	chimiddleware "github.com/go-chi/chi/v5/middleware"
 )
 
 func main() {
 	r := chi.NewRouter()
-	r.Use(middleware.Logger)
+	r.Use(chimiddleware.Logger)
 
 	config, err := config.Load()
 	if err != nil {
@@ -31,13 +32,17 @@ func main() {
 	userService := user.NewService(userRepo, config.JWTPrivateKey)
 	userHandler := user.NewHandler(userService)
 
-	r.Handle("/user", userHandler.Routes())
+	r.Mount("/api/user/", userHandler.Routes())
 
 	hub := chat.NewHub()
 	go hub.Run()
 
-	r.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
-		chat.HandleWS(hub, w, r)
+	r.Group(func(r chi.Router) {
+		r.Use(middleware.Auth(config.JWTPublicKey))
+
+		r.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
+			chat.HandleWS(hub, w, r)
+		})
 	})
 
 	log.Printf("Running server on port: %s", config.ServerPort)
