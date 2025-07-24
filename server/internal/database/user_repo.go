@@ -32,11 +32,12 @@ func (r *UserRepo) CreateUser(u *user.User) error {
 
 	set := pipe.SetNX(ctx, userNameKey, u.ID, 0)
 
-	userJSON, err := json.Marshal(u)
-	if err != nil {
-		return fmt.Errorf("databse: failed to marshall user: %v", err)
-	}
-	pipe.HSet(ctx, userKey, "data", userJSON)
+	pipe.HSet(ctx, userKey, map[string]any{
+		"id":         u.ID,
+		"username":   u.Username,
+		"password":   u.Password,
+		"created_at": u.CreatedAt.Format(time.RFC3339),
+	})
 
 	if _, err := pipe.Exec(ctx); err != nil {
 		return fmt.Errorf("database: failed to complete redis transaction, %v", err)

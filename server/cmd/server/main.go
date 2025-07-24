@@ -2,22 +2,19 @@ package main
 
 import (
 	"chatter/server/config"
-	"chatter/server/internal/chat"
 	"chatter/server/internal/database"
-	"chatter/server/internal/middleware"
 	"chatter/server/internal/user"
 	"fmt"
 	"log"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/cors"
+
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
 )
 
 func main() {
-	r := chi.NewRouter()
-	r.Use(chimiddleware.Logger)
-
 	config, err := config.Load()
 	if err != nil {
 		log.Fatalf("Error loading config, %v", err)
@@ -28,22 +25,22 @@ func main() {
 		log.Fatalf("Error connecting to db, %v", err)
 	}
 
+	r := chi.NewRouter()
+
+	r.Use(chimiddleware.Logger)
+
+	r.Use(cors.Handler(cors.Options{
+		AllowedOrigins:   []string{"*"},
+		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowedHeaders:   []string{"*"},
+		AllowCredentials: false,
+	}))
+
 	userRepo := database.NewUserRepo(db)
 	userService := user.NewService(userRepo, config.JWTPrivateKey)
 	userHandler := user.NewHandler(userService)
 
-	r.Mount("/api/user/", userHandler.Routes())
-
-	hub := chat.NewHub()
-	go hub.Run()
-
-	r.Group(func(r chi.Router) {
-		r.Use(middleware.Auth(config.JWTPublicKey))
-
-		r.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
-			chat.HandleWS(hub, w, r)
-		})
-	})
+	r.Mount("/api/user", userHandler.Routes())
 
 	log.Printf("Running server on port: %s", config.ServerPort)
 
