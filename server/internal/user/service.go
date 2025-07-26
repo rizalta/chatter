@@ -100,7 +100,7 @@ func (s *Service) Login(ctx context.Context, username, password string) (string,
 
 func (s *Service) generateToken(userID string) (string, error) {
 	claims := jwt.MapClaims{
-		"sub": userID,
+		"id":  userID,
 		"exp": time.Now().Add(24 * time.Hour).Unix(),
 	}
 
