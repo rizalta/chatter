@@ -75,7 +75,7 @@ func (h *Handler) handleRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	newUser, err := h.service.Register(r.Context(), req.Username, req.Password)
+	err := h.service.Register(r.Context(), req.Username, req.Password)
 	if err != nil {
 		switch {
 		case errors.Is(err, ErrUsernameLength),
@@ -101,5 +101,4 @@ func (h *Handler) handleRegister(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(newUser)
 }

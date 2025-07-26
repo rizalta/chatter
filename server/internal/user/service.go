@@ -47,22 +47,22 @@ func NewService(repo Repository, privateKey ed25519.PrivateKey) *Service {
 	}
 }
 
-func (s *Service) Register(ctx context.Context, username, password string) (*User, error) {
+func (s *Service) Register(ctx context.Context, username, password string) error {
 	if err := validateUsername(username); err != nil {
-		return nil, err
+		return err
 	}
 	_, err := s.repo.GetUserByUsername(ctx, username)
 	if err == nil {
-		return nil, ErrUsernameAlreadyExists
+		return ErrUsernameAlreadyExists
 	}
 
 	if err := validatePassword(password); err != nil {
-		return nil, err
+		return err
 	}
 
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
-		return nil, fmt.Errorf("user: failed to hash password, %v", err)
+		return fmt.Errorf("user: failed to hash password, %v", err)
 	}
 
 	u := User{
@@ -71,10 +71,10 @@ func (s *Service) Register(ctx context.Context, username, password string) (*Use
 	}
 
 	if err := s.repo.CreateUser(ctx, &u); err != nil {
-		return nil, fmt.Errorf("user: failed to create user, %v", err)
+		return fmt.Errorf("user: failed to create user, %v", err)
 	}
 
-	return &u, err
+	return nil
 }
 
 func (s *Service) Login(ctx context.Context, username, password string) (string, error) {
