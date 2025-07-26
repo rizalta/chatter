@@ -1,9 +1,11 @@
 package user
 
 import (
+	"context"
 	"crypto/ed25519"
 	"errors"
 	"fmt"
+	"regexp"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -13,14 +15,24 @@ import (
 const jwtExpirationTime = 24 * time.Hour
 
 var (
-	ErrUserAlreadyExists  = errors.New("user already exists")
+	ErrUsernameLength        = errors.New("username must be between 4 and 20 characters")
+	ErrUsernameStart         = errors.New("username must start with a letter")
+	ErrUsernameContains      = errors.New("username can only contain letters, numbers, and underscores")
+	ErrUsernameAlreadyExists = errors.New("username already exists")
+
+	ErrPasswordLength    = errors.New("password must be at least 8 characters long")
+	ErrPasswordUppercase = errors.New("password must contain at least one uppercase letter")
+	ErrPasswordLowercase = errors.New("password must contain at least one lowercase letter")
+	ErrPasswordDigit     = errors.New("password must contain at least one digit")
+	ErrPasswordSpecial   = errors.New("password must contain at least one special character")
+
 	ErrUserNotFound       = errors.New("user not found")
 	ErrInvalidCredentials = errors.New("invalid credentials")
 )
 
 type Repository interface {
-	CreateUser(u *User) error
-	GetUserByUsername(username string) (*User, error)
+	CreateUser(ctx context.Context, u *User) error
+	GetUserByUsername(ctx context.Context, username string) (*User, error)
 }
 
 type Service struct {
@@ -35,10 +47,17 @@ func NewService(repo Repository, privateKey ed25519.PrivateKey) *Service {
 	}
 }
 
-func (s *Service) Register(username, password string) (*User, error) {
-	_, err := s.repo.GetUserByUsername(username)
+func (s *Service) Register(ctx context.Context, username, password string) (*User, error) {
+	if err := validateUsername(username); err != nil {
+		return nil, err
+	}
+	_, err := s.repo.GetUserByUsername(ctx, username)
 	if err == nil {
-		return nil, ErrUserAlreadyExists
+		return nil, ErrUsernameAlreadyExists
+	}
+
+	if err := validatePassword(password); err != nil {
+		return nil, err
 	}
 
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
@@ -51,15 +70,15 @@ func (s *Service) Register(username, password string) (*User, error) {
 		Password: string(hashedPassword),
 	}
 
-	if err := s.repo.CreateUser(&u); err != nil {
+	if err := s.repo.CreateUser(ctx, &u); err != nil {
 		return nil, fmt.Errorf("user: failed to create user, %v", err)
 	}
 
 	return &u, err
 }
 
-func (s *Service) Login(username, password string) (string, error) {
-	u, err := s.repo.GetUserByUsername(username)
+func (s *Service) Login(ctx context.Context, username, password string) (string, error) {
+	u, err := s.repo.GetUserByUsername(ctx, username)
 	if err != nil {
 		return "", ErrUserNotFound
 	}
@@ -88,4 +107,44 @@ func (s *Service) generateToken(userID string) (string, error) {
 	token := jwt.NewWithClaims(jwt.SigningMethodEdDSA, claims)
 
 	return token.SignedString(s.privateKey)
+}
+
+func validateUsername(username string) error {
+	if len(username) < 4 || len(username) > 20 {
+		return ErrUsernameLength
+	}
+
+	if matched, _ := regexp.MatchString(`^[a-zA-Z]`, username); !matched {
+		return ErrUsernameStart
+	}
+
+	if matched, _ := regexp.MatchString(`^[a-zA-Z][a-zA-Z0-9_]*$`, username); !matched {
+		return ErrUsernameContains
+	}
+
+	return nil
+}
+
+func validatePassword(password string) error {
+	if len(password) < 8 {
+		return ErrPasswordLength
+	}
+
+	if matched, _ := regexp.MatchString(`[A-Z]`, password); !matched {
+		return ErrPasswordUppercase
+	}
+
+	if matched, _ := regexp.MatchString(`[a-z]`, password); !matched {
+		return ErrPasswordLowercase
+	}
+
+	if matched, _ := regexp.MatchString(`[0-9]`, password); !matched {
+		return ErrPasswordDigit
+	}
+
+	if matched, _ := regexp.MatchString(`[\W_]`, password); !matched {
+		return ErrPasswordSpecial
+	}
+
+	return nil
 }

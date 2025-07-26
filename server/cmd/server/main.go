@@ -4,6 +4,7 @@ import (
 	"chatter/server/config"
 	"chatter/server/internal/database"
 	"chatter/server/internal/user"
+	"context"
 	"fmt"
 	"log"
 	"net/http"
@@ -20,7 +21,9 @@ func main() {
 		log.Fatalf("Error loading config, %v", err)
 	}
 
-	db, err := database.NewClient(config.RedisAddr)
+	ctx := context.Background()
+
+	db, err := database.NewClient(ctx, config.RedisAddr)
 	if err != nil {
 		log.Fatalf("Error connecting to db, %v", err)
 	}

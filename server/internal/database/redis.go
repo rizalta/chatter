@@ -7,9 +7,7 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-var ctx = context.Background()
-
-func NewClient(address string) (*redis.Client, error) {
+func NewClient(ctx context.Context, address string) (*redis.Client, error) {
 	rdb := redis.NewClient(&redis.Options{
 		Addr:     address,
 		Password: "",
