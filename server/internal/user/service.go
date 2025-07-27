@@ -41,8 +41,8 @@ type Service struct {
 }
 
 type CustomClaims struct {
-	ID       string
-	Username string
+	ID       string `json:"id"`
+	Username string `json:"username"`
 	jwt.RegisteredClaims
 }
 
