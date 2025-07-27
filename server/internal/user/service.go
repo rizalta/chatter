@@ -40,6 +40,12 @@ type Service struct {
 	privateKey ed25519.PrivateKey
 }
 
+type CustomClaims struct {
+	ID       string
+	Username string
+	jwt.RegisteredClaims
+}
+
 func NewService(repo Repository, privateKey ed25519.PrivateKey) *Service {
 	return &Service{
 		repo:       repo,
@@ -90,7 +96,7 @@ func (s *Service) Login(ctx context.Context, username, password string) (string,
 		return "", fmt.Errorf("user: failed to check password, %v", err)
 	}
 
-	jwtToken, err := s.generateToken(u.ID)
+	jwtToken, err := s.generateToken(u.ID, u.Username)
 	if err != nil {
 		return "", fmt.Errorf("user: error genrating jwt token: %v", err)
 	}
@@ -98,10 +104,14 @@ func (s *Service) Login(ctx context.Context, username, password string) (string,
 	return jwtToken, nil
 }
 
-func (s *Service) generateToken(userID string) (string, error) {
-	claims := jwt.MapClaims{
-		"id":  userID,
-		"exp": time.Now().Add(24 * time.Hour).Unix(),
+func (s *Service) generateToken(userID, username string) (string, error) {
+	claims := CustomClaims{
+		ID:       userID,
+		Username: username,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(jwtExpirationTime)),
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
+		},
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodEdDSA, claims)
