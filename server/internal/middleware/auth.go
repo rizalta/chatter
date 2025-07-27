@@ -4,7 +4,7 @@ package middleware
 import (
 	"chatter/server/internal/user"
 	"context"
-	"crypto/ed25519"
+	"crypto/rsa"
 	"fmt"
 	"log"
 	"net/http"
@@ -17,7 +17,7 @@ type contextKey string
 
 const userKey contextKey = "user"
 
-func Auth(publicKey ed25519.PublicKey) func(http.Handler) http.Handler {
+func Auth(publicKey *rsa.PublicKey) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			tokenString := extractTokenFromHeader(r)
@@ -54,9 +54,9 @@ func extractTokenFromHeader(r *http.Request) string {
 	return parts[1]
 }
 
-func parseJWT(tokenStr string, publicKey ed25519.PublicKey) (*user.CustomClaims, error) {
+func parseJWT(tokenStr string, publicKey *rsa.PublicKey) (*user.CustomClaims, error) {
 	token, err := jwt.ParseWithClaims(tokenStr, &user.CustomClaims{}, func(t *jwt.Token) (any, error) {
-		if _, ok := t.Method.(*jwt.SigningMethodEd25519); !ok {
+		if _, ok := t.Method.(*jwt.SigningMethodRSA); !ok {
 			return nil, fmt.Errorf("middleware: unexpected signing method, %v", t.Header["alg"])
 		}
 

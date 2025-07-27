@@ -2,7 +2,7 @@ package user
 
 import (
 	"context"
-	"crypto/ed25519"
+	"crypto/rsa"
 	"errors"
 	"fmt"
 	"regexp"
@@ -37,7 +37,7 @@ type Repository interface {
 
 type Service struct {
 	repo       Repository
-	privateKey ed25519.PrivateKey
+	privateKey *rsa.PrivateKey
 }
 
 type CustomClaims struct {
@@ -46,7 +46,7 @@ type CustomClaims struct {
 	jwt.RegisteredClaims
 }
 
-func NewService(repo Repository, privateKey ed25519.PrivateKey) *Service {
+func NewService(repo Repository, privateKey *rsa.PrivateKey) *Service {
 	return &Service{
 		repo:       repo,
 		privateKey: privateKey,
@@ -114,7 +114,7 @@ func (s *Service) generateToken(userID, username string) (string, error) {
 		},
 	}
 
-	token := jwt.NewWithClaims(jwt.SigningMethodEdDSA, claims)
+	token := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
 
 	return token.SignedString(s.privateKey)
 }
