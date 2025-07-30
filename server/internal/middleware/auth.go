@@ -15,7 +15,7 @@ import (
 
 type contextKey string
 
-const userKey contextKey = "user"
+const UserKey contextKey = "user"
 
 func Auth(publicKey *rsa.PublicKey) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
@@ -33,7 +33,7 @@ func Auth(publicKey *rsa.PublicKey) func(http.Handler) http.Handler {
 				return
 			}
 
-			ctx := context.WithValue(r.Context(), userKey, claims)
+			ctx := context.WithValue(r.Context(), UserKey, claims)
 
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
@@ -47,7 +47,7 @@ func extractTokenFromHeader(r *http.Request) string {
 	}
 
 	parts := strings.Split(authHeader, " ")
-	if len(parts) != 2 || strings.ToLower(parts[0]) == "bearer" {
+	if len(parts) != 2 || strings.ToLower(parts[0]) != "bearer" {
 		return ""
 	}
 
@@ -71,6 +71,8 @@ func parseJWT(tokenStr string, publicKey *rsa.PublicKey) (*user.CustomClaims, er
 	if !ok {
 		return nil, fmt.Errorf("unauthorized: invalid claims")
 	}
+
+	fmt.Printf("claims: %v\n", claims)
 
 	return claims, nil
 }
