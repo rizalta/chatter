@@ -2,7 +2,9 @@ package main
 
 import (
 	"chatter/server/config"
+	"chatter/server/internal/chat"
 	"chatter/server/internal/database"
+	"chatter/server/internal/middleware"
 	"chatter/server/internal/user"
 	"context"
 	"fmt"
@@ -28,11 +30,11 @@ func main() {
 		log.Fatalf("Error connecting to db, %v", err)
 	}
 
-	r := chi.NewRouter()
+	router := chi.NewRouter()
 
-	r.Use(chimiddleware.Logger)
+	router.Use(chimiddleware.Logger)
 
-	r.Use(cors.Handler(cors.Options{
+	router.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   []string{"*"},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"*"},
@@ -43,9 +45,18 @@ func main() {
 	userService := user.NewService(userRepo, config.JWTPrivateKey)
 	userHandler := user.NewHandler(userService)
 
-	r.Mount("/api/user", userHandler.Routes())
+	router.Mount("/api/user", userHandler.Routes())
+
+	chatRepo := database.NewChatRepo(db)
+	chatService := chat.NewService(chatRepo)
+	chatHandler := chat.NewHandler(chatService)
+
+	router.Group(func(r chi.Router) {
+		r.Use(middleware.Auth(config.JWTPublicKey))
+		r.Mount("/api/chat", chatHandler.Routes())
+	})
 
 	log.Printf("Running server on port: %s", config.ServerPort)
 
-	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%s", config.ServerPort), r))
+	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%s", config.ServerPort), router))
 }
