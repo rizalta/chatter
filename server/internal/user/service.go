@@ -41,7 +41,7 @@ type Service struct {
 }
 
 type CustomClaims struct {
-	ID       string `json:"id"`
+	UserID   string `json:"id"`
 	Username string `json:"username"`
 	jwt.RegisteredClaims
 }
@@ -106,7 +106,7 @@ func (s *Service) Login(ctx context.Context, username, password string) (string,
 
 func (s *Service) generateToken(userID, username string) (string, error) {
 	claims := CustomClaims{
-		ID:       userID,
+		UserID:   userID,
 		Username: username,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(jwtExpirationTime)),
