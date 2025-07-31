@@ -20,13 +20,21 @@ const UserKey contextKey = "user"
 func Auth(publicKey *rsa.PublicKey) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			tokenString := extractTokenFromHeader(r)
-			if tokenString == "" {
+			var tokenStr string
+			fmt.Printf("r.URL.Header().Get(\"Connection\"): %v\n", r.Header.Get("Connection"))
+			fmt.Printf("r.URL.Header().Get(\"Upgrade\"): %v\n", r.Header.Get("Upgrade"))
+			if isWebSocket(r) {
+				log.Println("Websocket connection")
+				tokenStr = r.URL.Query().Get("token")
+			} else {
+				tokenStr = extractTokenFromHeader(r)
+			}
+			if tokenStr == "" {
 				http.Error(w, "Unauthorized: missing token", http.StatusUnauthorized)
 				return
 			}
 
-			claims, err := parseJWT(tokenString, publicKey)
+			claims, err := parseJWT(tokenStr, publicKey)
 			if err != nil {
 				log.Printf("middleware: %v", err)
 				http.Error(w, "Unauthorized", http.StatusUnauthorized)
@@ -46,11 +54,10 @@ func extractTokenFromHeader(r *http.Request) string {
 		return ""
 	}
 
-	parts := strings.Split(authHeader, " ")
+	parts := strings.Fields(authHeader)
 	if len(parts) != 2 || strings.ToLower(parts[0]) != "bearer" {
 		return ""
 	}
-
 	return parts[1]
 }
 
@@ -75,4 +82,11 @@ func parseJWT(tokenStr string, publicKey *rsa.PublicKey) (*user.CustomClaims, er
 	fmt.Printf("claims: %v\n", claims)
 
 	return claims, nil
+}
+
+func isWebSocket(r *http.Request) bool {
+	connectionStr := strings.ToLower(r.Header.Get("Connection"))
+	upgradeStr := strings.ToLower(r.Header.Get("Upgrade"))
+
+	return strings.Contains(connectionStr, "upgrade") && strings.Contains(upgradeStr, "websocket")
 }

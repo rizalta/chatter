@@ -56,6 +56,8 @@ func main() {
 		r.Mount("/api/chat", chatHandler.Routes())
 	})
 
+	go chatService.Listen(ctx)
+
 	log.Printf("Running server on port: %s", config.ServerPort)
 
 	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%s", config.ServerPort), router))
