@@ -6,9 +6,11 @@ import (
 	"chatter/server/internal/user"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/gorilla/websocket"
 )
 
 type Handler struct {
@@ -31,6 +33,8 @@ func (h *Handler) Routes() chi.Router {
 	r := chi.NewRouter()
 
 	r.Post("/chatroom", h.sendChatroomMessage)
+	r.Get("/ws", h.readChatroomMessages)
+
 	return r
 }
 
@@ -62,5 +66,28 @@ func (h *Handler) sendChatroomMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
+	w.WriteHeader(http.StatusCreated)
+}
+
+var upgrader = websocket.Upgrader{
+	CheckOrigin: func(r *http.Request) bool { return true },
+}
+
+func (h *Handler) readChatroomMessages(w http.ResponseWriter, r *http.Request) {
+	conn, err := upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		http.Error(w, "Unable to upgrade", http.StatusBadRequest)
+		return
+	}
+	log.Println("Upgraded connection")
+	defer conn.Close()
+
+	h.service.Addclient(conn)
+	defer h.service.RemoveClient(conn)
+
+	for {
+		if _, _, err := conn.NextReader(); err != nil {
+			break
+		}
+	}
 }

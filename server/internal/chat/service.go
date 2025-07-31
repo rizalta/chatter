@@ -1,19 +1,90 @@
 package chat
 
-import "context"
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"log"
+	"regexp"
+	"strings"
+	"sync"
+
+	"github.com/gorilla/websocket"
+)
+
+const (
+	newLinePlus = "\n+"
+	newLine     = "\n"
+)
+
+var ErrNoMessage = errors.New("no content found")
 
 type Repository interface {
 	AddChatroomMessage(context.Context, *Message) error
+	GetChatroomMessages(context.Context, string) ([]Message, string, error)
 }
 
 type Service struct {
-	repo Repository
+	repo    Repository
+	clients map[*websocket.Conn]bool
+	mu      *sync.Mutex
 }
 
 func NewService(repo Repository) *Service {
-	return &Service{repo: repo}
+	return &Service{
+		repo:    repo,
+		clients: make(map[*websocket.Conn]bool),
+		mu:      &sync.Mutex{},
+	}
 }
 
 func (s *Service) SendChatroomMessage(ctx context.Context, m *Message) error {
+	m.Content = strings.TrimSpace(m.Content)
+	if m.Content == "" {
+		return ErrNoMessage
+	}
+
+	re := regexp.MustCompile(newLinePlus)
+	m.Content = re.ReplaceAllString(m.Content, newLine)
+
 	return s.repo.AddChatroomMessage(ctx, m)
+}
+
+func (s *Service) broadcast(m Message) {
+	data, _ := json.Marshal(m)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for c := range s.clients {
+		if err := c.WriteMessage(websocket.TextMessage, data); err != nil {
+			c.Close()
+			delete(s.clients, c)
+		}
+	}
+}
+
+func (s *Service) Listen(ctx context.Context) {
+	lastID := "$"
+	for {
+		messages, newID, err := s.repo.GetChatroomMessages(ctx, lastID)
+		if err != nil {
+			log.Printf("chat: redis read error, %v\n", err)
+			continue
+		}
+		lastID = newID
+		for _, m := range messages {
+			s.broadcast(m)
+		}
+	}
+}
+
+func (s *Service) Addclient(c *websocket.Conn) {
+	s.mu.Lock()
+	s.clients[c] = true
+	s.mu.Unlock()
+}
+
+func (s *Service) RemoveClient(c *websocket.Conn) {
+	s.mu.Lock()
+	delete(s.clients, c)
+	s.mu.Unlock()
 }
