@@ -29,17 +29,21 @@ func (r *ChatRepo) AddChatroomMessage(ctx context.Context, m *chat.Message) erro
 	return err
 }
 
-func (r *ChatRepo) GetChatRoomMessages(ctx context.Context, after string, count int) ([]chat.Message, error) {
+func (r *ChatRepo) GetChatroomMessages(ctx context.Context, after string) ([]chat.Message, string, error) {
 	streams, err := r.db.XRead(ctx, &redis.XReadArgs{
-		Streams: []string{"chatroom", after},
-		Count:   int64(count),
+		Streams: []string{chatroomKey, after},
+		Count:   1,
 		Block:   0,
 	}).Result()
 	if err != nil {
-		return nil, err
+		return nil, after, err
 	}
 
-	return streamsToMessages(streams), nil
+	messages := streamsToMessages(streams)
+	lastID := messages[len(messages)-1].ID
+	fmt.Println(messages)
+
+	return streamsToMessages(streams), lastID, nil
 }
 
 func (r *ChatRepo) AddPrivateMessage(ctx context.Context, m *chat.Message) error {
