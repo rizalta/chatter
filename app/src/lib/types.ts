@@ -1,4 +1,9 @@
-export type Message = {
-  content: string
-  to: string
+export interface Message {
+  id: string;
+  from: string;
+  fromName: string;
+  to: string;
+  content: string;
+  timestamp: string;
 }
+
