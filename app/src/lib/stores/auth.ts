@@ -114,6 +114,8 @@ const createAuthStore = () => {
           loading: false,
         })
 
+        localStorage.setItem("jwt_token", token)
+
         return { success: true }
       } catch (error) {
         set(unauthenticatedState)
