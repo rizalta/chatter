@@ -21,10 +21,7 @@ func Auth(publicKey *rsa.PublicKey) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			var tokenStr string
-			fmt.Printf("r.URL.Header().Get(\"Connection\"): %v\n", r.Header.Get("Connection"))
-			fmt.Printf("r.URL.Header().Get(\"Upgrade\"): %v\n", r.Header.Get("Upgrade"))
 			if isWebSocket(r) {
-				log.Println("Websocket connection")
 				tokenStr = r.URL.Query().Get("token")
 			} else {
 				tokenStr = extractTokenFromHeader(r)
@@ -78,8 +75,6 @@ func parseJWT(tokenStr string, publicKey *rsa.PublicKey) (*user.CustomClaims, er
 	if !ok {
 		return nil, fmt.Errorf("unauthorized: invalid claims")
 	}
-
-	fmt.Printf("claims: %v\n", claims)
 
 	return claims, nil
 }

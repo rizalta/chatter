@@ -5,8 +5,6 @@ import (
 	"chatter/server/internal/middleware"
 	"chatter/server/internal/user"
 	"encoding/json"
-	"fmt"
-	"log"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -41,7 +39,6 @@ func (h *Handler) Routes() chi.Router {
 func (h *Handler) sendChatroomMessage(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 	claimsInterface := r.Context().Value(middleware.UserKey)
-	fmt.Printf("claimsInterface: %v\n", claimsInterface)
 	claims, ok := claimsInterface.(*user.CustomClaims)
 	if !ok {
 		w.WriteHeader(http.StatusUnauthorized)
@@ -58,6 +55,7 @@ func (h *Handler) sendChatroomMessage(w http.ResponseWriter, r *http.Request) {
 
 	var m Message
 	m.From = claims.UserID
+	m.FromName = claims.Username
 	m.Content = req.Message
 
 	if err := h.service.SendChatroomMessage(r.Context(), &m); err != nil {
@@ -79,7 +77,6 @@ func (h *Handler) readChatroomMessages(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Unable to upgrade", http.StatusBadRequest)
 		return
 	}
-	log.Println("Upgraded connection")
 	defer conn.Close()
 
 	h.service.Addclient(conn)
