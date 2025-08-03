@@ -67,6 +67,7 @@ func sortedKey(user1, user2 string) string {
 func messageToMap(m *chat.Message) map[string]string {
 	return map[string]string{
 		"from":      m.From,
+		"fromName":  m.FromName,
 		"to":        m.To,
 		"content":   m.Content,
 		"timestamp": m.Timestamp.Format(time.RFC3339),
@@ -79,9 +80,10 @@ func streamsToMessages(streams []redis.XStream) []chat.Message {
 	for _, stream := range streams {
 		for _, entry := range stream.Messages {
 			m := chat.Message{
-				ID:      entry.ID,
-				From:    entry.Values["from"].(string),
-				Content: entry.Values["content"].(string),
+				ID:       entry.ID,
+				From:     entry.Values["from"].(string),
+				Content:  entry.Values["content"].(string),
+				FromName: entry.Values["fromName"].(string),
 			}
 
 			if to, ok := entry.Values["to"].(string); ok {
