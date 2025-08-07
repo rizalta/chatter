@@ -5,14 +5,26 @@ import (
 	"chatter/server/internal/middleware"
 	"chatter/server/internal/user"
 	"encoding/json"
+	"errors"
 	"net/http"
+	"sync/atomic"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/gorilla/websocket"
 )
 
+const (
+	maxConnections = 1000
+	maxMessageSize = 512
+	writeWait      = 10 * time.Second
+	pongWait       = 60 * time.Second
+	pingPeriod     = 54 * time.Second
+)
+
 type Handler struct {
-	service *Service
+	service     *Service
+	connections int32
 }
 
 func NewHandler(service *Service) *Handler {
@@ -49,7 +61,7 @@ func (h *Handler) sendChatroomMessage(w http.ResponseWriter, r *http.Request) {
 	var req sendMessageRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(errorResponse{Message: "Bad request"})
+		json.NewEncoder(w).Encode(errorResponse{Message: "Can't decode the JSON"})
 		return
 	}
 
@@ -59,6 +71,11 @@ func (h *Handler) sendChatroomMessage(w http.ResponseWriter, r *http.Request) {
 	m.Content = req.Message
 
 	if err := h.service.SendChatroomMessage(r.Context(), &m); err != nil {
+		if errors.Is(err, ErrNoMessage) || errors.Is(err, ErrMessageLimit) {
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(errorResponse{Message: err.Error()})
+			return
+		}
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(errorResponse{Message: "Something went wrong"})
 		return
@@ -72,6 +89,19 @@ var upgrader = websocket.Upgrader{
 }
 
 func (h *Handler) readChatroomMessages(w http.ResponseWriter, r *http.Request) {
+	if (atomic.LoadInt32(&h.connections)) >= maxConnections {
+		http.Error(w, "Too many connections", http.StatusTooManyRequests)
+		return
+	}
+
+	claimsInterface := r.Context().Value(middleware.UserKey)
+	_, ok := claimsInterface.(*user.CustomClaims)
+	if !ok {
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(errorResponse{Message: "Unauthorized"})
+		return
+	}
+
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		http.Error(w, "Unable to upgrade", http.StatusBadRequest)
@@ -79,12 +109,39 @@ func (h *Handler) readChatroomMessages(w http.ResponseWriter, r *http.Request) {
 	}
 	defer conn.Close()
 
+	atomic.AddInt32(&h.connections, 1)
+	defer atomic.AddInt32(&h.connections, -1)
+
+	conn.SetReadLimit(maxMessageSize)
+	conn.SetWriteDeadline(time.Now().Add(pongWait))
+	conn.SetPongHandler(func(string) error { conn.SetWriteDeadline(time.Now().Add(pongWait)); return nil })
+
 	h.service.Addclient(conn)
 	defer h.service.RemoveClient(conn)
 
+	ticker := time.NewTicker(pingPeriod)
+	defer ticker.Stop()
+
+	done := make(chan struct{})
+
+	go func() {
+		defer close(done)
+		for {
+			if _, _, err := conn.NextReader(); err != nil {
+				break
+			}
+		}
+	}()
+
 	for {
-		if _, _, err := conn.NextReader(); err != nil {
-			break
+		select {
+		case <-done:
+			return
+		case <-ticker.C:
+			conn.SetWriteDeadline(time.Now().Add(writeWait))
+			if err := conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+				return
+			}
 		}
 	}
 }

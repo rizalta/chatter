@@ -15,9 +15,14 @@ import (
 const (
 	newLinePlus = "\n+"
 	newLine     = "\n"
+
+	maxMessageLength = 1000
 )
 
-var ErrNoMessage = errors.New("no content found")
+var (
+	ErrNoMessage    = errors.New("no message found")
+	ErrMessageLimit = errors.New("message limit reached")
+)
 
 type Repository interface {
 	AddChatroomMessage(context.Context, *Message) error
@@ -42,6 +47,10 @@ func (s *Service) SendChatroomMessage(ctx context.Context, m *Message) error {
 	m.Content = strings.TrimSpace(m.Content)
 	if m.Content == "" {
 		return ErrNoMessage
+	}
+
+	if len(m.Content) > maxMessageLength {
+		return ErrMessageLimit
 	}
 
 	re := regexp.MustCompile(newLinePlus)
