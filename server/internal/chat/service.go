@@ -59,7 +59,7 @@ func (s *Service) SendChatroomMessage(ctx context.Context, m *Message) error {
 	return s.repo.AddChatroomMessage(ctx, m)
 }
 
-func (s *Service) broadcast(m Message) {
+func (s *Service) broadcast(m WSMessage) {
 	data, _ := json.Marshal(m)
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -81,7 +81,11 @@ func (s *Service) Listen(ctx context.Context) {
 		}
 		lastID = newID
 		for _, m := range messages {
-			s.broadcast(m)
+			wm := WSMessage{
+				Type: "chat",
+				Data: m,
+			}
+			s.broadcast(wm)
 		}
 	}
 }

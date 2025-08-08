@@ -22,6 +22,13 @@ const (
 	pingPeriod     = 54 * time.Second
 )
 
+type messageType string
+
+type WSMessage struct {
+	Type messageType `json:"type"`
+	Data any         `json:"data"`
+}
+
 type Handler struct {
 	service     *Service
 	connections int32
