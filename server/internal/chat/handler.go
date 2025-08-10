@@ -24,11 +24,6 @@ const (
 
 type messageType string
 
-type WSMessage struct {
-	Type messageType `json:"type"`
-	Data any         `json:"data"`
-}
-
 type Handler struct {
 	service     *Service
 	connections int32
@@ -102,7 +97,7 @@ func (h *Handler) readChatroomMessages(w http.ResponseWriter, r *http.Request) {
 	}
 
 	claimsInterface := r.Context().Value(middleware.UserKey)
-	_, ok := claimsInterface.(*user.CustomClaims)
+	claims, ok := claimsInterface.(*user.CustomClaims)
 	if !ok {
 		w.WriteHeader(http.StatusUnauthorized)
 		json.NewEncoder(w).Encode(errorResponse{Message: "Unauthorized"})
@@ -123,8 +118,8 @@ func (h *Handler) readChatroomMessages(w http.ResponseWriter, r *http.Request) {
 	conn.SetWriteDeadline(time.Now().Add(pongWait))
 	conn.SetPongHandler(func(string) error { conn.SetWriteDeadline(time.Now().Add(pongWait)); return nil })
 
-	h.service.Addclient(conn)
-	defer h.service.RemoveClient(conn)
+	h.service.Addclient(conn, claims.UserID, claims.Username)
+	defer h.service.RemoveClient(conn, claims.UserID, claims.Username)
 
 	ticker := time.NewTicker(pingPeriod)
 	defer ticker.Stop()

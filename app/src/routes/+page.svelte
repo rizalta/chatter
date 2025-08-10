@@ -4,8 +4,8 @@
 	import { Button } from '@/components/ui/button';
 	import { ChatBubble } from '@/components/ui/chat_bubble';
 	import { auth, type AuthState } from '@/stores/auth';
-	import type { Message } from '@/types';
-	import { onDestroy } from 'svelte';
+	import type { Message, User, WSMessage } from '@/types';
+	import { onDestroy, tick } from 'svelte';
 
 	type ConnectionStatus = 'connecting' | 'connected' | 'disconnected' | 'error';
 
@@ -23,6 +23,8 @@
 	let ws: WebSocket | null = null;
 	let status = $state<ConnectionStatus>('disconnected');
 	let messages = $state<Message[]>([]);
+	let activeUsers = $state<User[]>([]);
+	let chatRoom = $state<HTMLDivElement>();
 
 	let newMessage = $state('');
 	let error = $state('');
@@ -49,8 +51,26 @@
 
 		ws.onmessage = (event) => {
 			try {
-				const data = JSON.parse(event.data) as Message;
-				messages = [...messages, data];
+				const data = JSON.parse(event.data) as WSMessage;
+				switch (data.type) {
+					case 'chat': {
+						messages = [...messages, data.data];
+						break;
+					}
+					case 'presence': {
+						const presence = data.data;
+						if (presence.status === 'joined') {
+							activeUsers = [...activeUsers, presence.user];
+						} else if (presence.status === 'left') {
+							activeUsers = activeUsers.filter((u) => u.id !== presence.user.id);
+						}
+						break;
+					}
+					case 'user_list': {
+						activeUsers = data.data;
+						break;
+					}
+				}
 			} catch (error) {
 				console.error('Error parsing ws message:', error);
 			}
@@ -101,16 +121,30 @@
 			if (!res.ok) {
 				throw new Error('Sending message failed');
 			}
-		} catch (error) {
-			const err = error instanceof Error ? error.message : 'Something went wrong';
-			console.log(err);
+		} catch (err) {
+			error = err instanceof Error ? err.message : 'Something went wrong';
+		} finally {
+			newMessage = '';
 		}
 	};
+
+	const scrollToBottom = () => {
+		if (chatRoom) chatRoom.scrollTop = chatRoom?.scrollHeight;
+	};
+
+	$effect(() => {
+		if (messages.length > 0) {
+			tick().then(() => {
+				scrollToBottom();
+			});
+		}
+	});
 </script>
 
 <main class="flex h-full w-4/5 lg:w-3/4">
-	<div class="flex w-full flex-col justify-between gap-2 sm:w-3/4">
-		<div class="w-full">
+	<span>{status} {error}</span>
+	<div class="flex w-full flex-col justify-between gap-2 p-3 sm:w-3/4">
+		<div class="flex w-full flex-col gap-2 overflow-auto px-3" bind:this={chatRoom}>
 			{#each messages as message (message.id)}
 				<ChatBubble isUser={authState.user?.id === message.from} {message} />
 			{/each}
@@ -120,5 +154,18 @@
 			<Button type="submit">Send</Button>
 		</form>
 	</div>
-	<div class="hidden w-1/4 bg-blue-400 sm:block"></div>
+	<div class="bg-primary-foreground hidden w-1/4 rounded-lg p-3 shadow-2xl sm:block">
+		<h1 class="text-secondary-foreground text-shadow-accent text-center text-lg font-semibold">
+			Active Users
+		</h1>
+		<div class="flex flex-col gap-2 overflow-auto">
+			{#each activeUsers as user (user.id)}
+				{#if user.id !== authState.user?.id}
+					<span class="bg-secondary rounded-md py-1 pl-5">
+						<a href={`/message/${user.id}`} class="hover:underline">{user.username}</a>
+					</span>
+				{/if}
+			{/each}
+		</div>
+	</div>
 </main>

@@ -31,15 +31,15 @@ type Repository interface {
 
 type Service struct {
 	repo    Repository
-	clients map[*websocket.Conn]bool
-	mu      *sync.Mutex
+	clients map[*websocket.Conn]*UserInfo
+	mu      *sync.RWMutex
 }
 
 func NewService(repo Repository) *Service {
 	return &Service{
 		repo:    repo,
-		clients: make(map[*websocket.Conn]bool),
-		mu:      &sync.Mutex{},
+		clients: make(map[*websocket.Conn]*UserInfo),
+		mu:      &sync.RWMutex{},
 	}
 }
 
@@ -61,8 +61,8 @@ func (s *Service) SendChatroomMessage(ctx context.Context, m *Message) error {
 
 func (s *Service) broadcast(m WSMessage) {
 	data, _ := json.Marshal(m)
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	for c := range s.clients {
 		if err := c.WriteMessage(websocket.TextMessage, data); err != nil {
 			c.Close()
@@ -90,14 +90,59 @@ func (s *Service) Listen(ctx context.Context) {
 	}
 }
 
-func (s *Service) Addclient(c *websocket.Conn) {
+func (s *Service) Addclient(c *websocket.Conn, userID, username string) {
+	activeUsers := s.getActiveUsers()
+	if len(activeUsers) > 0 {
+		m := WSMessage{
+			Type: typeUserList,
+			Data: s.getActiveUsers(),
+		}
+		data, _ := json.Marshal(m)
+		c.WriteMessage(websocket.TextMessage, data)
+	}
+
+	u := UserInfo{
+		ID:       userID,
+		Username: username,
+	}
 	s.mu.Lock()
-	s.clients[c] = true
+	s.clients[c] = &u
 	s.mu.Unlock()
+
+	s.broadcast(WSMessage{
+		Type: typePresence,
+		Data: PresenceMessage{
+			Status: statusJoined,
+			User:   u,
+		},
+	})
 }
 
-func (s *Service) RemoveClient(c *websocket.Conn) {
+func (s *Service) RemoveClient(c *websocket.Conn, userID, username string) {
 	s.mu.Lock()
 	delete(s.clients, c)
 	s.mu.Unlock()
+
+	u := UserInfo{
+		ID:       userID,
+		Username: username,
+	}
+
+	s.broadcast(WSMessage{
+		Type: "presence",
+		Data: PresenceMessage{
+			Status: statusLeft,
+			User:   u,
+		},
+	})
+}
+
+func (s *Service) getActiveUsers() []*UserInfo {
+	var users []*UserInfo
+
+	for _, u := range s.clients {
+		users = append(users, u)
+	}
+
+	return users
 }
