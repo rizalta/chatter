@@ -32,7 +32,7 @@
 		if (isToday) {
 			return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 		} else {
-			return date.toLocaleDateString(); // localized date format
+			return date.toLocaleDateString();
 		}
 	}
 </script>
