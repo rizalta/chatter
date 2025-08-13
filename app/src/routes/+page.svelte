@@ -70,6 +70,9 @@
 						activeUsers = data.data;
 						break;
 					}
+					case 'history': {
+						messages = data.data;
+					}
 				}
 			} catch (error) {
 				console.error('Error parsing ws message:', error);
@@ -128,6 +131,30 @@
 		}
 	};
 
+	const loadMoreMessages = async () => {
+		const after = messages[0].id;
+		try {
+			const res = await fetch(`${PUBLIC_API_URL}/chat/history?after=${after}`, {
+				method: 'GET',
+				headers: {
+					Authorization: `Bearer ${authState.token}`,
+					'Content-Type': 'application/json'
+				}
+			});
+
+			if (!res.ok) {
+				throw new Error('no messages');
+			}
+
+			const data = await res.json();
+			const newData = data.messages as Message[];
+
+			messages = [...newData, ...messages];
+		} catch (err) {
+			error = (err as Error).message;
+		}
+	};
+
 	const scrollToBottom = () => {
 		if (chatRoom) chatRoom.scrollTop = chatRoom?.scrollHeight;
 	};
@@ -142,9 +169,13 @@
 </script>
 
 <main class="flex h-full w-4/5 lg:w-3/4">
-	<span>{status} {error}</span>
 	<div class="flex w-full flex-col justify-between gap-2 p-3 sm:w-3/4">
 		<div class="flex w-full flex-col gap-2 overflow-auto px-3" bind:this={chatRoom}>
+			<div class="relative flex items-center">
+				<div class="flex-grow border-t border-gray-400"></div>
+				<Button class="mx-3" onclick={loadMoreMessages}>Load more</Button>
+				<div class="flex-grow border-t border-gray-400"></div>
+			</div>
 			{#each messages as message (message.id)}
 				<ChatBubble isUser={authState.user?.id === message.from} {message} />
 			{/each}
@@ -158,6 +189,7 @@
 		<h1 class="text-secondary-foreground text-shadow-accent text-center text-lg font-semibold">
 			Active Users
 		</h1>
+		<span>{status} {error}</span>
 		<div class="flex flex-col gap-2 overflow-auto">
 			{#each activeUsers as user (user.id)}
 				{#if user.id !== authState.user?.id}
@@ -166,6 +198,7 @@
 					</span>
 				{/if}
 			{/each}
+			<span class="bg-secondary rounded-md py-1 pl-5">{authState.user?.username} (You)</span>
 		</div>
 	</div>
 </main>

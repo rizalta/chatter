@@ -46,6 +46,7 @@ func (h *Handler) Routes() chi.Router {
 
 	r.Post("/chatroom", h.sendChatroomMessage)
 	r.Get("/ws", h.readChatroomMessages)
+	r.Get("/history", h.loadMoreHistory)
 
 	return r
 }
@@ -118,8 +119,10 @@ func (h *Handler) readChatroomMessages(w http.ResponseWriter, r *http.Request) {
 	conn.SetWriteDeadline(time.Now().Add(pongWait))
 	conn.SetPongHandler(func(string) error { conn.SetWriteDeadline(time.Now().Add(pongWait)); return nil })
 
-	h.service.Addclient(conn, claims.UserID, claims.Username)
-	defer h.service.RemoveClient(conn, claims.UserID, claims.Username)
+	u := UserInfo{ID: claims.UserID, Username: claims.Username}
+
+	h.service.Addclient(r.Context(), conn, &u)
+	defer h.service.RemoveClient(conn, &u)
 
 	ticker := time.NewTicker(pingPeriod)
 	defer ticker.Stop()
@@ -146,4 +149,25 @@ func (h *Handler) readChatroomMessages(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+}
+
+type historyResponse struct {
+	Messages []Message `json:"messages"`
+}
+
+func (h *Handler) loadMoreHistory(w http.ResponseWriter, r *http.Request) {
+	after := r.URL.Query().Get("after")
+	if after == "" {
+		http.Error(w, "message id missing", http.StatusBadRequest)
+		return
+	}
+
+	messages, err := h.service.LoadHistoryMessages(r.Context(), after)
+	if err != nil {
+		http.Error(w, "no messages", http.StatusBadRequest)
+		return
+	}
+
+	json.NewEncoder(w).Encode(historyResponse{Messages: messages})
+	w.WriteHeader(http.StatusOK)
 }

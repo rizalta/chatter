@@ -4,6 +4,7 @@ import (
 	"chatter/server/internal/chat"
 	"context"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -55,6 +56,20 @@ func (r *ChatRepo) AddPrivateMessage(ctx context.Context, m *chat.Message) error
 	}).Result()
 
 	return err
+}
+
+func (r *ChatRepo) GetHistory(ctx context.Context, lastID string, count int) ([]chat.Message, error) {
+	if lastID != "+" {
+		lastID = "(" + lastID
+	}
+	stream, err := r.db.XRevRangeN(ctx, chatroomKey, lastID, "-", int64(count)).Result()
+	if err != nil {
+		return nil, err
+	}
+
+	slices.Reverse(stream)
+
+	return streamsToMessages([]redis.XStream{{Messages: stream}}), nil
 }
 
 func sortedKey(user1, user2 string) string {

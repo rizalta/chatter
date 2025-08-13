@@ -17,6 +17,7 @@ const (
 	newLine     = "\n"
 
 	maxMessageLength = 1000
+	historyCount     = 20
 )
 
 var (
@@ -27,6 +28,7 @@ var (
 type Repository interface {
 	AddChatroomMessage(context.Context, *Message) error
 	GetChatroomMessages(context.Context, string) ([]Message, string, error)
+	GetHistory(context.Context, string, int) ([]Message, error)
 }
 
 type Service struct {
@@ -90,7 +92,7 @@ func (s *Service) Listen(ctx context.Context) {
 	}
 }
 
-func (s *Service) Addclient(c *websocket.Conn, userID, username string) {
+func (s *Service) Addclient(ctx context.Context, c *websocket.Conn, u *UserInfo) {
 	activeUsers := s.getActiveUsers()
 	if len(activeUsers) > 0 {
 		m := WSMessage{
@@ -101,38 +103,39 @@ func (s *Service) Addclient(c *websocket.Conn, userID, username string) {
 		c.WriteMessage(websocket.TextMessage, data)
 	}
 
-	u := UserInfo{
-		ID:       userID,
-		Username: username,
-	}
 	s.mu.Lock()
-	s.clients[c] = &u
+	s.clients[c] = u
 	s.mu.Unlock()
 
 	s.broadcast(WSMessage{
 		Type: typePresence,
 		Data: PresenceMessage{
 			Status: statusJoined,
-			User:   u,
+			User:   *u,
 		},
 	})
+
+	lastID := "+"
+	history, _ := s.repo.GetHistory(ctx, lastID, historyCount)
+	m := WSMessage{
+		Type: typeHistory,
+		Data: history,
+	}
+
+	data, _ := json.Marshal(m)
+	c.WriteMessage(websocket.TextMessage, data)
 }
 
-func (s *Service) RemoveClient(c *websocket.Conn, userID, username string) {
+func (s *Service) RemoveClient(c *websocket.Conn, u *UserInfo) {
 	s.mu.Lock()
 	delete(s.clients, c)
 	s.mu.Unlock()
-
-	u := UserInfo{
-		ID:       userID,
-		Username: username,
-	}
 
 	s.broadcast(WSMessage{
 		Type: "presence",
 		Data: PresenceMessage{
 			Status: statusLeft,
-			User:   u,
+			User:   *u,
 		},
 	})
 }
@@ -145,4 +148,13 @@ func (s *Service) getActiveUsers() []*UserInfo {
 	}
 
 	return users
+}
+
+func (s *Service) LoadHistoryMessages(ctx context.Context, after string) ([]Message, error) {
+	history, err := s.repo.GetHistory(ctx, after, historyCount)
+	if err != nil {
+		return nil, err
+	}
+
+	return history, nil
 }

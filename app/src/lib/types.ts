@@ -18,3 +18,4 @@ export type WSMessage =
   | { type: "chat", data: Message }
   | { type: "presence", data: { status: Status, user: User } }
   | { type: "user_list", data: User[] }
+  | { type: "history", data: Message[] }

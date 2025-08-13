@@ -22,6 +22,7 @@ const (
 	typePresence messageType = "presence"
 	typeChat     messageType = "chat"
 	typeUserList messageType = "user_list"
+	typeHistory  messageType = "history"
 )
 
 type UserInfo struct {
